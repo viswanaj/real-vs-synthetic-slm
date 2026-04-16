@@ -1,0 +1,11 @@
+{
+  "synthetic_pct": 90,
+  "total": 425,
+  "human_count": 100,
+  "ai_count": 325,
+  "human_fraction": 0.2353,
+  "ai_fraction": 0.7647,
+  "random_seed": 42,
+  "corpus_a_source": "corpus_a/corpus_a.json",
+  "corpus_b_source": "corpus_b/corpus_b.json"
+}

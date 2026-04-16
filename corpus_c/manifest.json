@@ -1,0 +1,10 @@
+{
+  "total": 486,
+  "human_count": 243,
+  "ai_count": 243,
+  "human_fraction": 0.5,
+  "ai_fraction": 0.5,
+  "random_seed": 42,
+  "corpus_a_source": "corpus_a/corpus_a.json",
+  "corpus_b_source": "corpus_b/corpus_b.json"
+}

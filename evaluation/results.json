@@ -1,0 +1,77 @@
+[
+  {
+    "model": "A",
+    "adapter_path": "models/model_a",
+    "num_samples": 50,
+    "perplexity": {
+      "mean": 8.43,
+      "median": 7.64,
+      "std": 3.97
+    },
+    "rouge": {
+      "rouge1": 0.3406,
+      "rouge2": 0.0655,
+      "rougeL": 0.1674
+    },
+    "diversity": {
+      "distinct_1": 0.2908,
+      "distinct_2": 0.7526
+    },
+    "generation_length": {
+      "mean": 153.0,
+      "median": 157.0,
+      "min": 96,
+      "max": 185
+    }
+  },
+  {
+    "model": "B",
+    "adapter_path": "models/model_b",
+    "num_samples": 50,
+    "perplexity": {
+      "mean": 13.64,
+      "median": 12.36,
+      "std": 6.73
+    },
+    "rouge": {
+      "rouge1": 0.2767,
+      "rouge2": 0.0459,
+      "rougeL": 0.1376
+    },
+    "diversity": {
+      "distinct_1": 0.3721,
+      "distinct_2": 0.8424
+    },
+    "generation_length": {
+      "mean": 134.0,
+      "median": 135.5,
+      "min": 93,
+      "max": 164
+    }
+  },
+  {
+    "model": "C",
+    "adapter_path": "models/model_c",
+    "num_samples": 50,
+    "perplexity": {
+      "mean": 8.52,
+      "median": 7.54,
+      "std": 4.14
+    },
+    "rouge": {
+      "rouge1": 0.3038,
+      "rouge2": 0.0472,
+      "rougeL": 0.1477
+    },
+    "diversity": {
+      "distinct_1": 0.3554,
+      "distinct_2": 0.8464
+    },
+    "generation_length": {
+      "mean": 144.8,
+      "median": 149.0,
+      "min": 83,
+      "max": 179
+    }
+  }
+]
