@@ -1,0 +1,27 @@
+[
+  {
+    "model": "mix_75",
+    "adapter_path": "models/model_mix_75",
+    "num_samples": 200,
+    "perplexity": {
+      "mean": 9.43,
+      "median": 8.39,
+      "std": 4.45
+    },
+    "rouge": {
+      "rouge1": 0.2824,
+      "rouge2": 0.0423,
+      "rougeL": 0.1379
+    },
+    "diversity": {
+      "distinct_1": 0.2306,
+      "distinct_2": 0.7342
+    },
+    "generation_length": {
+      "mean": 138.9,
+      "median": 139.0,
+      "min": 102,
+      "max": 177
+    }
+  }
+]

@@ -1,89 +1,87 @@
-# Corpus Builder — Neuropharmacology SLM Study
+# Synthetic Ratio Study for Neuropharmacology Abstracts
 
-Builds training corpora and fine-tunes models to study the effect of synthetic training data ratios on SLM quality.
+This repository studies how training-data provenance changes generation behavior:
+fine-tuned LoRA adapters are trained on blends of human PubMed abstracts (Corpus A)
+and AI-generated abstracts (Corpus B), then evaluated on held-out human references.
 
-## Experimental Design
+## Experiment Design
 
-Two source corpora (1000 abstracts each) are blended into 7 training sets with varying ratios of synthetic content:
+Seven training sets are built with fixed total size and varying synthetic ratio:
 
 | Training Set | Human % | Synthetic % | Total |
-|-------------|---------|-------------|-------|
-| mix_0       | 100%    | 0%          | 1000  |
-| mix_10      | 90%     | 10%         | 1000  |
-| mix_25      | 75%     | 25%         | 1000  |
-| mix_50      | 50%     | 50%         | 1000  |
-| mix_75      | 25%     | 75%         | 1000  |
-| mix_90      | 10%     | 90%         | 1000  |
-| mix_100     | 0%      | 100%        | 1000  |
+| --- | --- | --- | --- |
+| `mix_0` | 100 | 0 | 1000 |
+| `mix_10` | 90 | 10 | 1000 |
+| `mix_25` | 75 | 25 | 1000 |
+| `mix_50` | 50 | 50 | 1000 |
+| `mix_75` | 25 | 75 | 1000 |
+| `mix_90` | 10 | 90 | 1000 |
+| `mix_100` | 0 | 100 | 1000 |
 
-## Source Corpora
+## Repo Layout
 
-| Corpus | Provenance | Size |
-|--------|-----------|------|
-| A | Human-written (PubMed pre-2022) | ~1000 papers |
-| B | AI-generated (Claude, same topics) | ~1000 papers |
+- `fetch_corpus_a.py`: fetch PubMed abstracts (human corpus)
+- `generate_corpus_b.py`: generate synthetic corpus via Anthropic API
+- `resume_corpus_b.py`: continue corpus B generation from latest checkpoint
+- `build_corpus_c.py`: build ratio-based training sets
+- `finetune.py`: train one LoRA adapter per ratio
+- `evaluate.py`: evaluate **one** adapter per run (`--model 50`, etc.)
+- `generate_abstracts_all_mixes.py`: one abstract per mix model for a title
+- `evaluation/plot_mix_summary.py`: summary figure from `results_mix_*.json`
 
-## Setup
+## Quick Start
+
+### 1) Environment
 
 ```bash
 python3 -m venv venv
 source venv/bin/activate
-pip install requests
+pip install -r requirements.txt
 ```
 
-## Run Order
+### 2) Data pipeline
 
-### Step 1 — Fetch Corpus A (human text from PubMed)
 ```bash
 python fetch_corpus_a.py
-```
-No API key needed. NCBI allows free access.
-Optional: get a free NCBI API key at ncbi.nlm.nih.gov/account for faster fetching.
-
-### Step 2 — Generate Corpus B (AI text via Claude)
-```bash
 export ANTHROPIC_API_KEY=your_key_here
 python generate_corpus_b.py
-```
-Checkpoints every 50 records so you can resume if interrupted.
-Use `resume_corpus_b.py` to continue from the last checkpoint.
-
-### Step 3 — Build training sets (variable synthetic ratios)
-```bash
 python build_corpus_c.py
 ```
-No API needed — blends A and B at 7 different ratios.
 
-### Step 4 — Fine-tune models
+### 3) Train adapters
+
 ```bash
 python finetune.py
 ```
-Trains 7 LoRA-adapted Llama 3.2 3B models, one per training set.
 
-### Step 5 — Evaluate
+### 4) Evaluate (one mix at a time)
+
 ```bash
-python evaluate.py
+python evaluate.py --model 50 --seed 42
 ```
-Generates 200 abstracts per model, computes ROUGE, perplexity, and diversity metrics.
-Produces a blind review file for manual comparison.
 
-## Output Structure
+CPU-friendly:
 
+```bash
+python evaluate.py --model 50 --seed 42 --num-samples 40 --max-new-tokens 120 --skip-perplexity
 ```
-corpus_a/                     # Human-written source corpus
-corpus_b/                     # AI-generated source corpus
-training_sets/
-  mix_0/                      # 100% human
-  mix_10/                     # 90% human, 10% AI
-  mix_25/                     # 75% human, 25% AI
-  mix_50/                     # 50/50
-  mix_75/                     # 25% human, 75% AI
-  mix_90/                     # 10% human, 90% AI
-  mix_100/                    # 100% AI
-models/
-  model_mix_0/ ... model_mix_100/   # LoRA adapters per training set
-evaluation/
-  results.json                # Full metrics for all models
-  test_set.json               # The 200 titles/references used
-  blind_review.json           # Anonymized outputs for manual review
+
+Outputs: `evaluation/results_mix_<ratio>_seed_<seed>.json`, `evaluation/test_set_seed_<seed>.json`.
+
+### 5) Plot sweep
+
+```bash
+python evaluation/plot_mix_summary.py
 ```
+
+## GitHub / large files
+
+- `.gitignore` excludes `venv/`, `models/`, and common generated artifacts.
+- **Do not commit** adapter weights or checkpoints; use [Git LFS](https://git-lfs.com/) or external storage if you need them on the remote.
+- After rewriting history to drop large blobs, update the remote with:  
+  `git push --force-with-lease origin main`  
+  (only if you intend to replace the remote history.)
+
+## Secrets
+
+Use environment variables (e.g. `ANTHROPIC_API_KEY`); never commit API keys.

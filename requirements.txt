@@ -1,0 +1,8 @@
+requests
+numpy
+torch
+transformers
+datasets
+peft
+rouge-score
+matplotlib

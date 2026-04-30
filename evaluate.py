@@ -1,14 +1,15 @@
 """
-Evaluation Script — Compare 7 LoRA-tuned models (mix_0 through mix_100)
+Evaluation Script — Evaluate one LoRA-tuned model at a time (mix_0 … mix_100).
 Generates abstracts from held-out titles, computes automated metrics,
-and produces a blind review file for manual comparison.
+and optionally produces a blind review file when comparing multiple models
+(use a separate workflow or merge outputs for that).
 """
 
+import argparse
 import os
 import json
 import math
 import random
-from collections import Counter
 
 import torch
 import numpy as np
@@ -25,12 +26,84 @@ SEED = 42
 OUTPUT_DIR = "evaluation"
 
 SYNTHETIC_RATIOS = [0, 10, 25, 50, 75, 90, 100]
-MODELS = [
-    (f"mix_{pct}", f"models/model_mix_{pct}")
-    for pct in SYNTHETIC_RATIOS
-]
 
 CORPUS_A_PATH = "corpus_a/corpus_a.txt"
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Evaluate a single LoRA adapter on the shared test set."
+    )
+    parser.add_argument(
+        "--model",
+        type=str,
+        required=True,
+        help=(
+            "Which adapter to evaluate: synthetic ratio "
+            f"{min(SYNTHETIC_RATIOS)}–{max(SYNTHETIC_RATIOS)} (e.g. 25), "
+            "or name like mix_25."
+        ),
+    )
+    parser.add_argument(
+        "--adapter",
+        type=str,
+        default=None,
+        help="Override adapter directory (default: models/model_mix_<pct>).",
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=SEED,
+        help="Random seed for test-set sampling and generation.",
+    )
+    parser.add_argument(
+        "--num-samples",
+        type=int,
+        default=NUM_TEST_SAMPLES,
+        help="Number of held-out titles to evaluate.",
+    )
+    parser.add_argument(
+        "--max-new-tokens",
+        type=int,
+        default=MAX_NEW_TOKENS,
+        help="Max tokens generated per sample.",
+    )
+    parser.add_argument(
+        "--skip-perplexity",
+        action="store_true",
+        help="Skip perplexity to speed up CPU evaluation.",
+    )
+    parser.add_argument(
+        "--ppl-samples",
+        type=int,
+        default=None,
+        help="If set, compute perplexity on only this many samples (after generation).",
+    )
+    return parser.parse_args()
+
+
+def resolve_model(selector, adapter_override=None):
+    """
+    Return (model_name, adapter_path) for one run.
+    selector: e.g. "25", "mix_25", "90"
+    """
+    s = selector.strip().lower()
+    if s.startswith("mix_"):
+        s = s[4:]
+    try:
+        pct = int(s)
+    except ValueError:
+        raise SystemExit(
+            f"Invalid --model {selector!r}; use an integer from {SYNTHETIC_RATIOS} "
+            "or a name like mix_25."
+        )
+    if pct not in SYNTHETIC_RATIOS:
+        raise SystemExit(
+            f"--model {pct} is not in configured ratios {SYNTHETIC_RATIOS}."
+        )
+    name = f"mix_{pct}"
+    path = adapter_override if adapter_override else f"models/model_mix_{pct}"
+    return name, path
 
 
 def load_corpus_txt(path):
@@ -77,18 +150,18 @@ def load_model(adapter_path):
     return model, tokenizer
 
 
-def generate_abstract(model, tokenizer, title):
+def generate_abstract(model, tokenizer, title, seed, max_new_tokens):
     """Generate an abstract given a title, using the same prompt format as training."""
     prompt = f"### Title:\n{title}\n\n### Abstract:\n"
     inputs = tokenizer(
         prompt, return_tensors="pt", truncation=True, max_length=256
     ).to(DEVICE)
 
-    torch.manual_seed(SEED)
+    torch.manual_seed(seed)
     with torch.no_grad():
         outputs = model.generate(
             **inputs,
-            max_new_tokens=MAX_NEW_TOKENS,
+            max_new_tokens=max_new_tokens,
             do_sample=True,
             temperature=0.7,
             top_p=0.9,
@@ -129,7 +202,15 @@ def compute_distinct_n(texts, n):
     return round(len(set(all_ngrams)) / len(all_ngrams), 4)
 
 
-def evaluate_model(model_name, adapter_path, test_set):
+def evaluate_model(
+    model_name,
+    adapter_path,
+    test_set,
+    seed,
+    max_new_tokens,
+    skip_perplexity=False,
+    ppl_samples=None,
+):
     """Run full evaluation for one model."""
     print(f"\n{'='*55}")
     print(f"Evaluating Model {model_name} — {adapter_path}")
@@ -147,15 +228,17 @@ def evaluate_model(model_name, adapter_path, test_set):
 
         print(f"  [{i+1}/{len(test_set)}] Generating for: {title[:70]}...")
 
-        generated = generate_abstract(model, tokenizer, title)
+        generated = generate_abstract(model, tokenizer, title, seed, max_new_tokens)
         generations.append(generated)
 
         rouge = compute_rouge(generated, reference)
         rouge_scores.append(rouge)
 
-        formatted = f"### Title:\n{title}\n\n### Abstract:\n{reference}"
-        ppl = compute_perplexity(model, tokenizer, formatted)
-        perplexities.append(ppl)
+        if not skip_perplexity:
+            if ppl_samples is None or i < ppl_samples:
+                formatted = f"### Title:\n{title}\n\n### Abstract:\n{reference}"
+                ppl = compute_perplexity(model, tokenizer, formatted)
+                perplexities.append(ppl)
 
     gen_lengths = [len(g.split()) for g in generations]
 
@@ -163,11 +246,6 @@ def evaluate_model(model_name, adapter_path, test_set):
         "model": model_name,
         "adapter_path": adapter_path,
         "num_samples": len(test_set),
-        "perplexity": {
-            "mean": round(float(np.mean(perplexities)), 2),
-            "median": round(float(np.median(perplexities)), 2),
-            "std": round(float(np.std(perplexities)), 2),
-        },
         "rouge": {
             "rouge1": round(float(np.mean([s["rouge1"] for s in rouge_scores])), 4),
             "rouge2": round(float(np.mean([s["rouge2"] for s in rouge_scores])), 4),
@@ -184,6 +262,17 @@ def evaluate_model(model_name, adapter_path, test_set):
             "max": int(np.max(gen_lengths)),
         },
     }
+    if skip_perplexity:
+        results["perplexity"] = None
+    elif perplexities:
+        results["perplexity"] = {
+            "mean": round(float(np.mean(perplexities)), 2),
+            "median": round(float(np.median(perplexities)), 2),
+            "std": round(float(np.std(perplexities)), 2),
+            "computed_on_samples": len(perplexities),
+        }
+    else:
+        results["perplexity"] = None
 
     del model
     if torch.backends.mps.is_available():
@@ -253,57 +342,71 @@ def print_comparison_table(all_results):
     for label, category, key in rows:
         line = f"{label:<25}"
         for r in all_results:
-            line += f" {r[category][key]:>{col_width}}"
+            if category == "perplexity" and not r.get("perplexity"):
+                val = "n/a"
+            else:
+                val = r[category][key]
+            line += f" {val:>{col_width}}"
         print(line)
 
     print(f"{'=' * table_width}\n")
 
 
 def main():
-    print("Model Evaluation — Llama 3.2 3B LoRA")
+    args = parse_args()
+    model_name, adapter_path = resolve_model(args.model, args.adapter)
+
+    print("Model Evaluation — Llama 3.2 3B LoRA (single adapter)")
+    print(f"Model: {model_name} — {adapter_path}")
     print(f"Device: {DEVICE}")
-    print(f"Test samples: {NUM_TEST_SAMPLES}")
-    print(f"Max new tokens: {MAX_NEW_TOKENS}\n")
+    print(f"Seed: {args.seed}")
+    print(f"Test samples: {args.num_samples}")
+    print(f"Max new tokens: {args.max_new_tokens}")
+    print(f"Skip perplexity: {args.skip_perplexity}")
+    if args.ppl_samples is not None:
+        print(f"Perplexity samples: {args.ppl_samples}")
+    print()
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
+    if not os.path.exists(adapter_path):
+        raise SystemExit(f"Adapter path not found: {adapter_path}")
+
     print("Loading test set from Corpus A (human-written references)...")
     corpus_a = load_corpus_txt(CORPUS_A_PATH)
-    test_set = build_test_set(corpus_a, NUM_TEST_SAMPLES, SEED)
+    test_set = build_test_set(corpus_a, args.num_samples, args.seed)
     print(f"Selected {len(test_set)} test samples\n")
 
-    with open(os.path.join(OUTPUT_DIR, "test_set.json"), "w") as f:
+    test_set_file = os.path.join(OUTPUT_DIR, f"test_set_seed_{args.seed}.json")
+    with open(test_set_file, "w") as f:
         json.dump(test_set, f, indent=2)
 
-    all_results = []
-    all_generations = []
-    model_names = []
+    results, _ = evaluate_model(
+        model_name,
+        adapter_path,
+        test_set,
+        args.seed,
+        args.max_new_tokens,
+        skip_perplexity=args.skip_perplexity,
+        ppl_samples=args.ppl_samples,
+    )
+    all_results = [results]
 
-    for model_name, adapter_path in MODELS:
-        if not os.path.exists(adapter_path):
-            print(f"Skipping Model {model_name} — {adapter_path} not found")
-            continue
-        results, generations = evaluate_model(model_name, adapter_path, test_set)
-        all_results.append(results)
-        all_generations.append(generations)
-        model_names.append(model_name)
-
-    with open(os.path.join(OUTPUT_DIR, "results.json"), "w") as f:
+    results_file = os.path.join(OUTPUT_DIR, f"results_{model_name}_seed_{args.seed}.json")
+    with open(results_file, "w") as f:
         json.dump(all_results, f, indent=2)
 
     print_comparison_table(all_results)
 
-    print("Building blind review file...")
-    blind_review = build_blind_review(test_set, all_generations, model_names, SEED)
-    with open(os.path.join(OUTPUT_DIR, "blind_review.json"), "w") as f:
-        json.dump(blind_review, f, indent=2)
-    print(f"Saved {len(blind_review)} entries to {OUTPUT_DIR}/blind_review.json")
+    print(
+        "\nSkipping blind_review.json (single-model run). "
+        "Merge generations from multiple runs if you need a combined blind review."
+    )
 
-    print(f"\nAll results saved to {OUTPUT_DIR}/")
+    print(f"\nResults saved under {OUTPUT_DIR}/")
     print("Files:")
-    print(f"  results.json       — Full metrics for all models")
-    print(f"  test_set.json      — The {len(test_set)} titles/references used")
-    print(f"  blind_review.json  — Anonymized outputs for manual review")
+    print(f"  {os.path.basename(results_file)} — Metrics for {model_name}")
+    print(f"  {os.path.basename(test_set_file)} — The {len(test_set)} titles/references used")
 
 
 if __name__ == "__main__":

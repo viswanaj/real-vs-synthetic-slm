@@ -1,0 +1,31 @@
+# Python cache/build artifacts
+__pycache__/
+*.py[cod]
+*.so
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Secrets / local env
+.env
+.env.*
+
+# OS/editor noise
+.DS_Store
+.idea/
+.vscode/
+
+# Generated experiment artifacts
+evaluation/*.png
+evaluation/results_mix_*_seed_*.json
+evaluation/test_set_seed_*.json
+evaluation/abstracts_all_mixes.json
+corpus_b/checkpoint_*.json
+
+# Trained weights / checkpoints (use Git LFS or external storage if you need them remote)
+models/
