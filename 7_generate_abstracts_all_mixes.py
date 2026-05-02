@@ -1,18 +1,24 @@
 #!/usr/bin/env python3
 """
 Generate one abstract per mix adapter (mix_0 … mix_100) for a single title,
-using the same prompt format and decoding settings as evaluate.py.
+using the same prompt format and decoding settings as 6_evaluate.py.
 """
 
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import os
+from pathlib import Path
 
 import torch
 
-import evaluate as ev
+_ROOT = Path(__file__).resolve().parent
+_SPEC = importlib.util.spec_from_file_location("_evaluate_module", _ROOT / "6_evaluate.py")
+assert _SPEC and _SPEC.loader
+ev = importlib.util.module_from_spec(_SPEC)
+_SPEC.loader.exec_module(ev)
 
 
 def parse_args():
@@ -44,13 +50,13 @@ def parse_args():
         "--seed",
         type=int,
         default=ev.SEED,
-        help="Random seed for generation (same as evaluate.py).",
+        help="Random seed for generation (same as 6_evaluate.py).",
     )
     p.add_argument(
         "--max-new-tokens",
         type=int,
         default=ev.MAX_NEW_TOKENS,
-        help="Max tokens per abstract (same as evaluate.py).",
+        help="Max tokens per abstract (same as 6_evaluate.py).",
     )
     return p.parse_args()
 

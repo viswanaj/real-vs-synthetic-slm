@@ -170,7 +170,7 @@ def main():
     print(f"  Generated:  {len(records)} records")
     print(f"  Failed:     {len(failed)}")
     print(f"  Saved:      {json_path}")
-    print("\nDone! Run build_corpus_c.py next.")
+    print("\nDone! Run 4_build_mix_corpora.py next.")
 
 
 if __name__ == "__main__":

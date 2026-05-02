@@ -18,16 +18,20 @@ Seven training sets are built with fixed total size and varying synthetic ratio:
 | `mix_90` | 10 | 90 | 1000 |
 | `mix_100` | 0 | 100 | 1000 |
 
-## Repo Layout
+## Repo Layout (numbered pipeline)
 
-- `fetch_corpus_a.py`: fetch PubMed abstracts (human corpus)
-- `generate_corpus_b.py`: generate synthetic corpus via Anthropic API
-- `resume_corpus_b.py`: continue corpus B generation from latest checkpoint
-- `build_corpus_c.py`: build ratio-based training sets
-- `finetune.py`: train one LoRA adapter per ratio
-- `evaluate.py`: evaluate **one** adapter per run (`--model 50`, etc.)
-- `generate_abstracts_all_mixes.py`: one abstract per mix model for a title
-- `evaluation/plot_mix_summary.py`: summary figure from `results_mix_*.json`
+Scripts are ordered roughly by run order:
+
+| Script | Purpose |
+| --- | --- |
+| `1_fetch_corpus_a.py` | Fetch PubMed abstracts (human corpus A) |
+| `2_generate_corpus_b.py` | Generate synthetic corpus B via Anthropic API |
+| `3_resume_corpus_b.py` | Resume corpus B from the latest checkpoint |
+| `4_build_mix_corpora.py` | Blend A+B into `training_sets/mix_*` at 7 ratios |
+| `5_finetune.py` | Train one LoRA adapter per mix (`models/model_mix_*`) |
+| `6_evaluate.py` | Evaluate **one** adapter per run (e.g. `--model 50`) |
+| `7_generate_abstracts_all_mixes.py` | Generate one abstract per mix model for a title |
+| `evaluation/plot_mix_summary.py` | Summary figure from `results_mix_*.json` |
 
 ## Quick Start
 
@@ -42,28 +46,36 @@ pip install -r requirements.txt
 ### 2) Data pipeline
 
 ```bash
-python fetch_corpus_a.py
+python 1_fetch_corpus_a.py
 export ANTHROPIC_API_KEY=your_key_here
-python generate_corpus_b.py
-python build_corpus_c.py
+python 2_generate_corpus_b.py
+python 4_build_mix_corpora.py
 ```
+
+If corpus B generation stops midway, continue with:
+
+```bash
+python 3_resume_corpus_b.py
+```
+
+Then run `4_build_mix_corpora.py` again if needed.
 
 ### 3) Train adapters
 
 ```bash
-python finetune.py
+python 5_finetune.py
 ```
 
 ### 4) Evaluate (one mix at a time)
 
 ```bash
-python evaluate.py --model 50 --seed 42
+python 6_evaluate.py --model 50 --seed 42
 ```
 
 CPU-friendly:
 
 ```bash
-python evaluate.py --model 50 --seed 42 --num-samples 40 --max-new-tokens 120 --skip-perplexity
+python 6_evaluate.py --model 50 --seed 42 --num-samples 40 --max-new-tokens 120 --skip-perplexity
 ```
 
 Outputs: `evaluation/results_mix_<ratio>_seed_<seed>.json`, `evaluation/test_set_seed_<seed>.json`.
@@ -72,6 +84,12 @@ Outputs: `evaluation/results_mix_<ratio>_seed_<seed>.json`, `evaluation/test_set
 
 ```bash
 python evaluation/plot_mix_summary.py
+```
+
+### Optional — compare generations across mixes
+
+```bash
+python 7_generate_abstracts_all_mixes.py
 ```
 
 ## GitHub / large files

@@ -150,7 +150,7 @@ def main():
     build_corpus_b(corpus_a, CLAUDE_API_KEY, OUTPUT_DIR)
 
     print("\nDone! Corpus B is ready.")
-    print("Next step: run build_corpus_c.py to create the mixed corpus.")
+    print("Next step: run 4_build_mix_corpora.py to create the mixed training sets.")
 
 
 if __name__ == "__main__":
