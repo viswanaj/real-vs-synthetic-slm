@@ -25,6 +25,7 @@ evaluation/*.png
 evaluation/results_mix_*_seed_*.json
 evaluation/test_set_seed_*.json
 evaluation/abstracts_all_mixes.json
+evaluation/abstracts_prompt_series.json
 corpus_b/checkpoint_*.json
 
 # Trained weights / checkpoints (use Git LFS or external storage if you need them remote)

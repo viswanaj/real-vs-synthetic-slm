@@ -1,5 +1,8 @@
+# Install NumPy before other scientific stacks so wheels match (avoids
+# "numpy.dtype size changed, may indicate binary incompatibility").
+numpy>=1.26,<3
+
 requests
-numpy
 torch
 transformers
 datasets

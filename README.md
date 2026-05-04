@@ -30,7 +30,8 @@ Scripts are ordered roughly by run order:
 | `4_build_mix_corpora.py` | Blend A+B into `training_sets/mix_*` at 7 ratios |
 | `5_finetune.py` | Train one LoRA adapter per mix (`models/model_mix_*`) |
 | `6_evaluate.py` | Evaluate **one** adapter per run (e.g. `--model 50`) |
-| `7_generate_abstracts_all_mixes.py` | Generate one abstract per mix model for a title |
+| `7_generate_abstracts_all_mixes.py` | Generate one abstract per mix model for a single title |
+| `8_generate_abstracts_prompt_series.py` | Many prompts (default 20) × every mix model → one JSON |
 | `evaluation/plot_mix_summary.py` | Summary figure from `results_mix_*.json` |
 
 ## Quick Start
@@ -88,9 +89,25 @@ python evaluation/plot_mix_summary.py
 
 ### Optional — compare generations across mixes
 
+One shared title, all models:
+
 ```bash
 python 7_generate_abstracts_all_mixes.py
 ```
+
+Twenty prompts (sampled from corpus A), all models — loads each adapter once:
+
+```bash
+python 8_generate_abstracts_prompt_series.py --num-prompts 20 --prompt-seed 42
+```
+
+Custom titles (one per line); optional cap with `--num-prompts`:
+
+```bash
+python 8_generate_abstracts_prompt_series.py --titles-file my_titles.txt --num-prompts 20
+```
+
+Writes `evaluation/abstracts_prompt_series.json`.
 
 ## GitHub / large files
 
@@ -99,6 +116,22 @@ python 7_generate_abstracts_all_mixes.py
 - After rewriting history to drop large blobs, update the remote with:  
   `git push --force-with-lease origin main`  
   (only if you intend to replace the remote history.)
+
+## Troubleshooting
+
+### `ValueError: numpy.dtype size changed...`
+
+That means **NumPy’s C ABI doesn’t match** a compiled dependency (often **pandas**, **matplotlib**, **pyarrow**, or **scipy**) — typical after upgrading NumPy without reinstalling those packages.
+
+**Fix (venv activated):**
+
+```bash
+pip install --upgrade pip setuptools wheel
+pip uninstall numpy pandas pyarrow matplotlib scipy scikit-learn -y 2>/dev/null || true
+pip install -r requirements.txt --no-cache-dir
+```
+
+If it still fails, **delete and recreate** the virtualenv, then `pip install -r requirements.txt` again. **Conda:** `conda install numpy` / reinstall the env’s **pandas** and **matplotlib** against the same NumPy build.
 
 ## Secrets
 
